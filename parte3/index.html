@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title> Socket.IO chat </title>
+        <style>
+
+            *{ 
+                list-style: none; 
+                padding: 0px;
+            }
+
+            li:hover{ cursor:pointer; }
+
+        </style>
+    </head>
+    <body>
+        
+        <div class="container">
+            <div class="container-chat">
+                <ul id="chat"></ul>
+            </div>
+            <p id="isTyping"></p>
+            <div class="panel">
+                <input type="text" autocomplete="off" id="paper">
+                <button id="send"> Enviar </button>
+            </div>
+        </div>
+        
+        <script src="/socket.io/socket.io.js"></script>
+        <script>
+
+            var socket = io(); // Conectando com o socket.io
+
+            var send  = document.getElementById('send')
+            ,   paper = document.getElementById('paper')
+            ,   chat  = document.getElementById('chat')
+            ,   isTyping = document.getElementById('isTyping')
+
+            ,   createLine = function(server){
+    
+                    var li = document.createElement('li');
+                    li.addEventListener('click', function(evt){
+                        paper.value += '@'+evt.target.innerText;
+                    })
+                    li.innerHTML = server;
+                    return li;
+
+                }
+
+            ,   sendMessage = function(msg){
+
+                    isTyping.innerText = "";
+
+                    var arr = msg.split(' ');
+
+                    var target = arr.filter(function(el){
+                        return !el.indexOf('@');
+                    });
+
+                    if( target.length > 0 ){
+
+                        target = target[0].split('@').join('');
+                        socket.emit('send-msg-private', {target: target, msg: msg});
+
+                    }else{
+
+                        socket.emit('send-msg-public', msg);
+
+                    }
+                    
+                    paper.value = "";
+
+                }
+            ;
+
+            socket.emit('create-room', Date.now());
+
+            //=======================================
+            //  Listeners de recebimento de mensagem
+            //=======================================
+
+            socket.on('user-connected', function (msg) {
+                chat.appendChild(createLine(msg));
+            });
+
+            socket.on('send-msg-public', function (msg) {
+                chat.appendChild(createLine(msg));
+            });
+
+            socket.on('send-msg-private', function(msg){
+                chat.appendChild(createLine(msg))
+            });
+
+            socket.on('is-typing', function(data){
+                if(data.isTyping){
+                    isTyping.innerText = data.client + " esta digitando...";
+                }else{
+                    isTyping.innerText = "";
+                }
+            });
+
+            // ---------------------------------------
+
+            //================================
+            //  Eventos de envio de mensagem
+            //================================
+
+            send.addEventListener('click', function(evt){
+                sendMessage(paper.value);
+                socket.emit('is-typing', false);
+            });
+
+            paper.addEventListener('keyup', function(evt){
+
+                if(evt.keyCode === 13){ sendMessage(paper.value);}
+
+                if(evt.keyCode === 13 || paper.value.length <= 0 ){
+                    socket.emit('is-typing', false);
+                }else{
+                    socket.emit('is-typing', true);
+                }   
+
+            });
+
+            // --------------------------------
+
+        </script>
+
+    </body>
+</html>
