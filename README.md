@@ -357,6 +357,68 @@ setInterval(function(){
 }, 5000);
 ```
 
-Estou em um lugar em wifi esse estava no draft, depois atualizarei com as imagens e mais exeplos.
+## Mensagens privada
+
+Ja vimos sobre salas em socket.io e a ideia é bem essa, criaremos salas one-to-alone ao contrário de salas one-to-one.
+
+### one-to-one
+One-to-one são salas criadas para a inclusão tanto do usuário que emite a mensagem quanto o que recebe a mensagem.
+
+### one-to-alone
+One-to-alone são salas onde apenas os usuários que recebem mensagens são inclusos e assim os outros podem lhe enviar mensagens privadas apenas sabendo o id da sala que ele está.
+
+### Irei descrever duas cenas para tentar ilustrar essas ideias:
+
+**one-to-one**: Fulano A chamou o fulano B para conversar na cozinha enquanto os fulanos C, D e E ficavam conversando na sala.
+* **_Houve a troca de informação os dois dialogaram em um ambiente particular para em comum._**
+
+**one-to-alone**: Fulano A entava com seus amigos na sala de sua casa quando resolveu escrever e levar uma carta para Fulana B, ele chegou lá, e jogou a carta por baixo da porta da Fulana B, enquanto seus amigos, Fulano C, D e E continuavam na sala.
+* **_Não houve uma troca de informação, apenas o Fulano A deixou a carta para Fulana B ler._**
+
+### Bora codar :)
+
+Já que pensaremos do jeito one-to-alone precisamos que todos os usuários conecte no chat e automaticamente seja jogado pra dentro de uma sala ÚNICA! Como fazer isso?
+
+* A sala deve haver um ID único
+* Precisamos saber quais dados são único para usar na ID da sala
+* Precisamos gravar as informações da sala
+
+1. Podemos pegar o hoário em que o usuário se conectou com `` Date.now() ``
+2. Para diferenciar as salas das demias oque temos é o tempo em que o mesmo se conectou
+3. Faremos isso logo logo ...
+
+Assim que o úsuario se conectar ele deve criar uma sala pra ele, então criaremos um emissor (.emit) com o nome de `` .emit('create-room', Date.now()); `` e passando o time em que ele se conectou.
+
+**index.html**
+```
+socket.emit('create-room', Date.now());
+```
+
+Agora vamos para o nosso listener criar a lógica da criação de salas
+
+**index.js**
+```
+io.on('connection', function(socket){
+    var client = { id: socket.client.id, room: undefined };
+    socket.on('create-room', function(room){
+        client.room = room;
+        socket.join(client.room);
+        online.push(client);
+        console.log('\nSala criada'.cyan, client.room, 'para'.cyan, client.id);
+        socket.broadcast.emit('user-connected', 'Usuário <b>'+ client.id + '</b> acabou de se conectar.');
+    });
+});
+```
+
+Vejamos, a primeira linha é onde começamos a escutar a conexão de um usuário no namespace ('/', por default) e na segunda linha acontece o listener do emissor que criamos no nosso front. Dentro do listener:
+
+1. Estamos atribuindo o valor da sala para um objeto chamado ``client``.
+2. Criamos a sala com os dados de ``client.room``
+
+Por último devemos salvar esses dados em algum lugar para caso queiramos enviar uma mensagem privada. Ai que entra a terceira linha do nosso listener.
+
+3. Adicionamos o objeto ``client`` dentro de um vetor onde faz todo o controle dos usuários online
+
+*Obs :*  A ``var online = []`` é criado fora do escopo do listener ``.on('connection')``, porque não interessa a nós ter um vetor sendo criado e resetando todas as informações toda a vez que um usuário de conectar. O papel desse vetor é muito importante, é ele quem guarda as informações de sala e username de todos os usuário conectados no nosso chat.
 
 
