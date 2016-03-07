@@ -419,6 +419,125 @@ Por último devemos salvar esses dados em algum lugar para caso queiramos enviar
 
 3. Adicionamos o objeto ``client`` dentro de um vetor onde faz todo o controle dos usuários online
 
-*Obs :*  A ``var online = []`` é criado fora do escopo do listener ``.on('connection')``, porque não interessa a nós ter um vetor sendo criado e resetando todas as informações toda a vez que um usuário de conectar. O papel desse vetor é muito importante, é ele quem guarda as informações de sala e username de todos os usuário conectados no nosso chat.
+*Obs :*  A ``var online = []`` é criado fora do escopo do listener ``.on('connection')``, porque não interessa a nós ter um vetor sendo criado e resetando as informações toda a vez que um usuário de conectar. O papel desse vetor é muito importante, é ele quem guarda as informações de sala e username de todos os usuários conectados no nosso chat.
+
+Você talvez esteja se perguntando como definir o determinado usuário que for receber a mensagem privada...
+
+No exemplo eu optei por "``@`` + ``username`` + `` o texto``", vamos fazer deste jeito. Mas como faze isso ?
+
+* Precisariamos decupar todos os dados por espaços
+* Procurar identificar o usuario que está pré escrito por ``@``
+* Formular o texto novamente
+* Enviar o username para ser procurado no nosso vetor ``online``
+
+1. Criaremos uma função no front para enviar a mensagem e nela definimos se a mensagem é privada ou pública
+2. Como o username já retirado do texto vamos envia-lo como parâmetro pela função emissor
+
+**index.html**
+``````
+var sendMessage = function(msg){
+    
+        var arr = msg.split(' ');
+
+        var target = arr.filter(function(el){
+            return !el.indexOf('@');
+        });
+
+        if( target.length > 0 ){
+            target = target[0].split('@').join('');
+            socket.emit('send-msg-private', {target: target, msg: msg});
+        }else{
+            socket.emit('send-msg-public', msg);
+        }
+}
+``````
+
+1. Declarando a função que fará o serviço de enviar mensagem para o sevidor
+2. Transformando a mensagem escrita pelo usuário emissor em um vetor
+3. Procurando o indice do vetor que possui o ``@username``
+4. Caso ele exista eu emito um evento para mensagens privadas, junto em parâmetros o **target** e a **mensagem**
+5. Caso não exista referência a algum usuário conectado eu emito um evento para mensagens públicas, juntos em parâmetro apenas a **mensagem**
+
+**index.js**
+
+* Meu listener no caso de envio público de mensagem
+
+Não possui muito mistério este listener, ele apenas pega a mensagem de reditribui para os demais conectados.
+````````
+    // Listener no caso do envio de mensagem pública
+    socket.on('send-msg-public', function(msg){
+        var msg = '<b>' + client.id + '</b>: ' + msg;
+        socket.emit('send-msg-public', msg);
+        socket.broadcast.emit('send-msg-public', msg);
+    });
+````````
+
+* Meu listener no caso de envio privado de mensagem
+
+Não é nada demais este nosso listener, procuramos o ``client`` de destino com a função ``.forEach()`` logo passamos a ter os dados de sala e username do destinatário.
+``````
+    // Listener no caso do envio de mensagem privada
+    socket.on('send-msg-private', function(data){
+        var msg = '<b>' + client.id + '</b>: ' + data.msg;
+        socket.emit('send-msg-private', msg);
+        online.forEach(function(el){
+            if(el.id == data.target){ socket.to(el.room).emit('send-msg-private', msg); }
+        });
+    });
+````````
+
+### Usuário digitando ...
+Agora vamos criar mais uma funcionalidade pra este nosso chat, sou curioso quero saber quem está escrendo antes mesmo de enviar qualquer tipo de mensagem. Partiu codar.
+
+* @guilhermeepaixaoo, como fazer isso ?
+* Galeris, é moleza. Temos que pensar nos eventos te teclado do usuário e tranfegar essa informações. Bora codar ...
+
+1. Teriamos que saber quando qualquer usuário está digitando no campo de texto...
+2. Precisamos saber quando ele não tem mais nada escrit no campo de texto, ou seja, ou ele enviou a mensagem ou se arrependeu de escrever.
+3. E depois disso, criar tanto os eventos de emit e listener
+
+``index.html``
+
+Este é o evento que irá verificar se o usuário esta digitando ou não.
+``````
+paper.addEventListener('keyup', function(evt){
+
+    if(evt.keyCode === 13){ sendMessage(paper.value); }
+
+    if(evt.keyCode === 13 || paper.value.length <= 0 ){
+        socket.emit('is-typing', false);
+    }else{
+        socket.emit('is-typing', true);
+    }   
+
+});
+``````
+1. Caso ele esteja digitando: ``.emit('is-typing', true);``
+2. Caso ele não esteja digitando e o campo esteja vazio: ``.emit('is-typing', true);``
+
+**index.js**
+``````
+ socket.on('is-typing', function(data){
+    socket.broadcast.emit('is-typing', {client: client.id, isTyping: data});
+});
+``````
+
+O servidor retorna para todos o estato em que o usuário se encontra e qual é este usuario, com o objeto ``{client: client.id, isTyping: data}``
+
+Voltando para o nosso front
+``index.html``
+
+``````
+socket.on('is-typing', function(data){
+    if(data.isTyping){
+        isTyping.innerText = data.client + " esta digitando...";
+    }else{
+        isTyping.innerText = "";
+    }
+});
+``````
+
+1. Caso seja verdadeiro o estato de digitação ele atribui em um ``<p>`` um texto informativo.
+2. Caso não seja verdade o estato de digitação do usuário ele apaga qualquer texto que esteja no ``<p>``
 
 
